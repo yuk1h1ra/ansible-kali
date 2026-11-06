@@ -1,28 +1,38 @@
-set nocompatible
-filetype plugin indent on
-syntax on
-
-" 検索・表示
 set number
-set showmatch
-set hlsearch
+set cursorline
+
+set autoread
+set hidden
+set confirm
+
 set incsearch
 set ignorecase
 set smartcase
-set wildmenu
+
+set noswapfile
+set clipboard=unnamedplus
+set list listchars=tab:>-,trail:･
+
 set laststatus=2
-set encoding=utf-8
-set mouse=a
+set noshowmode
 
-" 編集・インデント
-set backspace=indent,eol,start
-set tabstop=4
-set shiftwidth=4
-set softtabstop=4
-set expandtab
+" colorscheme
+syntax enable
+colorscheme slate
+highlight clear CursorLine
+highlight NormalFloat guibg=#484848
+
 set autoindent
+set smartindent
 
-" YAMLは2スペースインデントが慣例
-autocmd FileType yaml setlocal tabstop=2 shiftwidth=2 softtabstop=2
+set tabstop=8
+set shiftwidth=2
+set softtabstop=2
 
-colorscheme default
+set wildmenu wildmode=list
+
+set signcolumn=yes
+
+" help mapping
+" detail for :help c_CTRL-u
+nnoremap <C-h> :<C-u>help<Space>
