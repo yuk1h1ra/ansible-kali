@@ -1,0 +1,258 @@
+---
+- name: Kali VM initial setup (local execution)
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars_prompt:
+    # -e bloodhound_admin_password=... で渡した場合はプロンプトをスキップする
+    - name: bloodhound_admin_password
+      prompt: "BloodHound CE initial admin password"
+      private: true
+
+  vars:
+    keyboard_layout: jp
+    cli_tools_packages:
+      - ripgrep
+      - fzf
+      - bat
+      - htop
+      - tree
+      - git
+      - curl
+      - wget
+      - jq
+      - unzip
+      - net-tools
+
+  tasks:
+    # ===== common =====
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      become: true
+      tags: [always]
+
+    # ===== cli_tools =====
+    - name: Install convenient CLI tools
+      ansible.builtin.apt:
+        name: "{{ cli_tools_packages }}"
+        state: present
+      become: true
+      tags: [cli_tools]
+
+    # ===== docker =====
+    - name: Docker
+      tags: [docker]
+      block:
+        - name: Ensure docker.io is installed
+          ansible.builtin.apt:
+            name: docker.io
+            state: present
+          become: true
+
+        - name: Ensure docker service is enabled and running
+          ansible.builtin.systemd:
+            name: docker
+            enabled: true
+            state: started
+          become: true
+
+        - name: Add current user to the docker group (sudoless docker)
+          ansible.builtin.user:
+            name: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['user_id']) }}"
+            groups: docker
+            append: true
+          become: true
+
+        - name: Install docker compose v2 plugin, fallback to legacy docker-compose if unavailable
+          become: true
+          block:
+            - name: Install docker-compose-v2
+              ansible.builtin.apt:
+                name: docker-compose-v2
+                state: present
+          rescue:
+            - name: Fallback - install legacy docker-compose (v1 standalone)
+              ansible.builtin.apt:
+                name: docker-compose
+                state: present
+
+    # ===== bloodhound =====
+    - name: BloodHound CE
+      tags: [bloodhound]
+      vars:
+        bloodhound_dir: "{{ ansible_facts['env']['HOME'] }}/Awesome/BloodHound"
+        bloodhound_cli_arch: "{{ 'amd64' if ansible_facts['architecture'] == 'x86_64' else 'arm64' }}"
+      block:
+        - name: Create ~/Awesome/BloodHound directory
+          ansible.builtin.file:
+            path: "{{ bloodhound_dir }}"
+            state: directory
+            mode: "0755"
+
+        - name: Check whether BloodHound CE is already installed
+          ansible.builtin.stat:
+            path: "{{ ansible_facts['env']['HOME'] }}/.config/bloodhound/docker-compose.yml"
+          register: bloodhound_installed
+
+        - name: Install BloodHound CE (first time only)
+          when: not bloodhound_installed.stat.exists
+          block:
+            - name: Download bloodhound-cli release tarball
+              ansible.builtin.get_url:
+                url: "https://github.com/SpecterOps/bloodhound-cli/releases/latest/download/bloodhound-cli-linux-{{ bloodhound_cli_arch }}.tar.gz"
+                dest: "{{ bloodhound_dir }}/bloodhound-cli.tar.gz"
+                mode: "0644"
+
+            - name: Extract bloodhound-cli binary
+              ansible.builtin.unarchive:
+                src: "{{ bloodhound_dir }}/bloodhound-cli.tar.gz"
+                dest: "{{ bloodhound_dir }}"
+                remote_src: true
+
+            - name: Pre-set the default admin password (must run before install)
+              ansible.builtin.command:
+                cmd: ./bloodhound-cli config set default_admin.password "{{ bloodhound_admin_password }}"
+                chdir: "{{ bloodhound_dir }}"
+              become: true
+              become_user: "{{ ansible_facts['user_id'] }}"
+              changed_when: true
+              no_log: true
+
+            - name: Run BloodHound CE first-time install
+              ansible.builtin.command:
+                cmd: ./bloodhound-cli install
+                chdir: "{{ bloodhound_dir }}"
+              become: true
+              become_user: "{{ ansible_facts['user_id'] }}"
+              changed_when: true
+
+    # ===== tmux =====
+    - name: Tmux
+      tags: [tmux]
+      block:
+        - name: Ensure tmux is installed
+          ansible.builtin.apt:
+            name: tmux
+            state: present
+          become: true
+
+        - name: Deploy tmux.conf
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}/config/tmux.conf"
+            dest: "{{ ansible_facts['env']['HOME'] }}/.tmux.conf"
+            mode: "0644"
+
+    # ===== vim =====
+    - name: Vim
+      tags: [vim]
+      block:
+        - name: Ensure vim is installed
+          ansible.builtin.apt:
+            name: vim
+            state: present
+          become: true
+
+        - name: Deploy vimrc
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}/config/vimrc"
+            dest: "{{ ansible_facts['env']['HOME'] }}/.vimrc"
+            mode: "0644"
+
+    # ===== screenlock =====
+    - name: Screen lock
+      tags: [screenlock]
+      block:
+        - name: Ensure xfce4-screensaver is installed
+          ansible.builtin.apt:
+            name: xfce4-screensaver
+            state: present
+          become: true
+
+        - name: Verify DISPLAY/DBUS session is available for xfconf changes
+          ansible.builtin.assert:
+            that:
+              - ansible_facts['env']['DISPLAY'] is defined
+              - ansible_facts['env']['DBUS_SESSION_BUS_ADDRESS'] is defined
+            fail_msg: >-
+              DISPLAY / DBUS_SESSION_BUS_ADDRESS が見えません。
+              このplaybookはXFCEデスクトップ上の端末(xfce4-terminal等)から、
+              ログインユーザーのまま実行してください（sudoでplaybook全体を
+              実行したり、SSHのみのセッションから実行すると失敗します）。
+
+        - name: Disable idle-triggered screensaver activation
+          community.general.xfconf:
+            channel: xfce4-screensaver
+            property: /saver/idle-activation/enabled
+            value_type: bool
+            value: false
+
+        - name: Disable screen lock even if the saver activates
+          community.general.xfconf:
+            channel: xfce4-screensaver
+            property: /lock/enabled
+            value_type: bool
+            value: false
+
+    # ===== keyboard =====
+    - name: Keyboard
+      tags: [keyboard]
+      block:
+        - name: Ensure console-setup is installed
+          ansible.builtin.apt:
+            name: console-setup
+            state: present
+          become: true
+
+        - name: Set XKBMODEL in /etc/default/keyboard
+          ansible.builtin.lineinfile:
+            path: /etc/default/keyboard
+            regexp: '^XKBMODEL='
+            line: 'XKBMODEL="pc105"'
+          become: true
+          notify: Apply console keyboard layout
+
+        - name: Set XKBLAYOUT in /etc/default/keyboard
+          ansible.builtin.lineinfile:
+            path: /etc/default/keyboard
+            regexp: '^XKBLAYOUT='
+            line: 'XKBLAYOUT="{{ keyboard_layout }}"'
+          become: true
+          notify: Apply console keyboard layout
+
+        - name: Ensure XKBVARIANT is empty (standard JIS 106/109 mapping)
+          ansible.builtin.lineinfile:
+            path: /etc/default/keyboard
+            regexp: '^XKBVARIANT='
+            line: 'XKBVARIANT=""'
+          become: true
+          notify: Apply console keyboard layout
+
+        - name: Verify DISPLAY/DBUS session is available for xfconf changes
+          ansible.builtin.assert:
+            that:
+              - ansible_facts['env']['DISPLAY'] is defined
+              - ansible_facts['env']['DBUS_SESSION_BUS_ADDRESS'] is defined
+            fail_msg: "XFCEデスクトップ上の端末から通常ユーザーとして実行してください。"
+
+        - name: Stop Xfce from deferring to system default keymap
+          community.general.xfconf:
+            channel: keyboard-layout
+            property: /Default/XkbDisable
+            value_type: bool
+            value: false
+
+        - name: Set Xfce GUI keyboard layout to Japanese
+          community.general.xfconf:
+            channel: keyboard-layout
+            property: /Default/XkbLayout
+            value_type: string
+            value: "{{ keyboard_layout }}"
+
+  handlers:
+    - name: Apply console keyboard layout
+      ansible.builtin.command: setupcon --save
+      become: true
+      changed_when: true
