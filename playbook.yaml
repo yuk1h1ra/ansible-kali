@@ -12,6 +12,7 @@
 
   vars:
     keyboard_layout: jp
+    system_timezone: Asia/Tokyo
     cli_tools_packages:
       - ripgrep
       - fzf
@@ -33,6 +34,13 @@
         cache_valid_time: 3600
       become: true
       tags: [always]
+
+    # ===== timezone =====
+    - name: Set system timezone
+      community.general.timezone:
+        name: "{{ system_timezone }}"
+      become: true
+      tags: [timezone]
 
     # ===== cli_tools =====
     - name: Install convenient CLI tools
@@ -129,9 +137,12 @@
     - name: Tmux
       tags: [tmux]
       block:
-        - name: Ensure tmux is installed
+        # xclip は tmux.conf のコピー（tmux-yank 相当）でクリップボード連携に使う
+        - name: Ensure tmux and xclip are installed
           ansible.builtin.apt:
-            name: tmux
+            name:
+              - tmux
+              - xclip
             state: present
           become: true
 

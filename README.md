@@ -6,10 +6,11 @@ Kali VM に XFCE デスクトップ上でログインし、そのデスクトッ
 
 ## できること
 
+- システムのタイムゾーンを `Asia/Tokyo` に変更
 - Kali標準ツール群はそのまま維持し、便利なCLIツール（ripgrep, fzf, bat, htop, tree, jq等）を追加インストール
 - Docker（`docker.io`）のインストール、サービス有効化、現在ユーザーの docker グループ追加、docker compose プラグイン対応
 - BloodHound Community Edition を公式 `bloodhound-cli` 経由でインストール（初期admin パスワードを指定値に設定）
-- tmux / vim の実用的な設定ファイル配置
+- tmux / vim の実用的な設定ファイル配置（tmux は個人 dotfiles の設定をプラグイン無しで再現）
 - XFCE のアイドル自動ロック（screensaver）を完全に無効化
 - キーボード配列を日本語(JIS)に変更（コンソール・XFCE GUI セッション両方）
 
@@ -40,7 +41,7 @@ xfconf設定タスクが `DISPLAY`/`DBUS_SESSION_BUS_ADDRESS` 不在で失敗す
 ansible-playbook playbook.yaml --ask-become-pass
 ```
 
-一部だけ実行したい場合はタグを指定する（`cli_tools` / `docker` / `bloodhound` / `tmux` / `vim` /
+一部だけ実行したい場合はタグを指定する（`timezone` / `cli_tools` / `docker` / `bloodhound` / `tmux` / `vim` /
 `screenlock` / `keyboard`。apt cache 更新は常に実行される）:
 
 ```bash
@@ -56,6 +57,34 @@ dry-run（文法・論理チェックのみ。`command`モジュールやxfconf�
 ansible-playbook playbook.yaml --syntax-check
 ansible-playbook playbook.yaml --check --diff
 ```
+
+## tmux の主なキーバインド
+
+prefix は `C-t`（`C-t C-t` でアプリに `C-t` を送る）。TPM・プラグインは使わず、dotfiles で使っていた
+tmux-sensible / tmux-pain-control / tmux-yank / tmux-logging / tmux-split-window-cross-plugin /
+tmux-powerline(simple テーマ) 相当の設定を `config/tmux.conf` に直接書いている。
+
+| キー | 動作 |
+|---|---|
+| `prefix r` / `prefix R` | 設定リロード |
+| `prefix \|` / `prefix -` | 左右 / 上下に分割（カレントパス継承。`\` `_` は全幅分割） |
+| `prefix +` | 十字に4分割 |
+| `prefix h/j/k/l` | ペイン移動 |
+| `prefix H/J/K/L` | ペインリサイズ（連打可） |
+| `prefix <` / `prefix >` | ウィンドウの並べ替え |
+| `prefix C-p` / `prefix C-n` | 前 / 次のウィンドウ |
+| コピーモードで `y` | クリップボードへコピー（xclip。マウス選択は PRIMARY へ） |
+| `prefix P` | ペインのロギング開始/停止（`~/tmux-<session>-<window>-<pane>-<日時>.log`） |
+| `prefix M-p` / `prefix M-P` | 画面 / 全履歴をファイルに保存 |
+| `prefix M-c` | ペインの履歴を消去 |
+
+新しく開いたペイン/ウィンドウは `script` 経由でシェルが起動し、`~/tmux-logs/<日時>-pane<ペインID>.log`
+（と `.timing`）に常時自動記録される。ログはANSIエスケープ込みなので `less -R` で見るか、
+`scriptreplay -t X.timing X.log` で再生する。`new-window 'htop'` のようにコマンドを指定したペインは
+記録対象外。ログは自動削除されないので定期的に整理すること。
+
+ステータスバーは上部に表示し、セッション情報・LAN IP・VPN(`tun*`)の IP・曜日・日付・時刻を出す。
+Powerline 用パッチフォントが無くても崩れない記号（▶ ❯ など）を使っている。
 
 ## 既知の注意点
 
