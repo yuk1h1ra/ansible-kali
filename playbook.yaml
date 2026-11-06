@@ -66,18 +66,16 @@
             append: true
           become: true
 
-        - name: Install docker compose v2 plugin, fallback to legacy docker-compose if unavailable
+        # Kali の docker-compose パッケージは v2 で、/usr/libexec/docker/cli-plugins/docker-compose
+        # を提供するため `docker compose` もこれで使える（docker-compose-v2 パッケージは存在しない）
+        # util-linux-extra は sg コマンド（bloodhound タグで docker グループ付き実行に使う）を提供する
+        - name: Install docker compose v2 (plugin) and sg
+          ansible.builtin.apt:
+            name:
+              - docker-compose
+              - util-linux-extra
+            state: present
           become: true
-          block:
-            - name: Install docker-compose-v2
-              ansible.builtin.apt:
-                name: docker-compose-v2
-                state: present
-          rescue:
-            - name: Fallback - install legacy docker-compose (v1 standalone)
-              ansible.builtin.apt:
-                name: docker-compose
-                state: present
 
     # ===== bloodhound =====
     - name: BloodHound CE
@@ -116,17 +114,15 @@
               ansible.builtin.command:
                 cmd: ./bloodhound-cli config set default_admin.password "{{ bloodhound_admin_password }}"
                 chdir: "{{ bloodhound_dir }}"
-              become: true
-              become_user: "{{ ansible_facts['user_id'] }}"
               changed_when: true
               no_log: true
 
+            # 同一セッションでは docker グループ追加が未反映のため、sg で docker グループを付与して実行する
+            # （become_user に自分自身を指定しても Ansible は sudo を省略するので回避にならない）
             - name: Run BloodHound CE first-time install
               ansible.builtin.command:
-                cmd: ./bloodhound-cli install
+                cmd: sg docker -c "./bloodhound-cli install"
                 chdir: "{{ bloodhound_dir }}"
-              become: true
-              become_user: "{{ ansible_facts['user_id'] }}"
               changed_when: true
 
     # ===== tmux =====

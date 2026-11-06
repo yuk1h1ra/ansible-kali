@@ -61,11 +61,11 @@ ansible-playbook playbook.yaml --check --diff
 
 - **docker グループの反映**: `docker` タグのタスクで現在ユーザーを `docker` グループに追加するが、
   通常はログインセッション単位でキャッシュされるため、同一セッションでは反映されない。
-  `bloodhound` タグのdockerコマンドは `become_user` 経由（sudo再評価）で回避しているが、
+  `bloodhound` タグの `bloodhound-cli install` は `sg docker -c` で docker グループを付与して実行し回避しているが、
   手動で `docker` コマンドを叩く場合は一度ログアウト/再ログイン、または `newgrp docker` が必要。
-- **docker-compose-v2 の有無**: Kaliのリポジトリに `docker-compose-v2` パッケージが無い場合は、
-  旧来の `docker-compose`（v1）にフォールバックする。どちらが入ったかは
-  `docker compose version` / `docker-compose --version` で確認すること。
+- **docker compose**: Kali には `docker-compose-v2` パッケージが無いが、`docker-compose` パッケージ自体が
+  v2 で `docker compose` プラグイン（`/usr/libexec/docker/cli-plugins/docker-compose`）も提供するため、
+  これをインストールしている。`docker compose version` で確認できる。
 - **BloodHound CEのデータ配置**: `bloodhound-cli` の実行ファイル自体は `~/Awesome/BloodHound`
   に置かれるが、実際の `docker-compose.yml` や `bloodhound.config.json` は常に
   `~/.config/bloodhound/`（`bloodhound-cli` 側の仕様で変更不可）に生成される。
@@ -88,7 +88,7 @@ setxkbmap -query
 xfconf-query -c xfce4-screensaver -lv
 xfconf-query -c keyboard-layout -lv
 systemctl status docker
-docker compose version   # もしくは docker-compose --version
+docker compose version
 cd ~/Awesome/BloodHound && ./bloodhound-cli config get default_admin.password
 ```
 
