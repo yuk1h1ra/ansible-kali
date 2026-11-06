@@ -168,6 +168,43 @@
             dest: "{{ ansible_facts['env']['HOME'] }}/.vimrc"
             mode: "0644"
 
+    # ===== firefox =====
+    # Firefox の Enterprise Policies（policies.json）で拡張機能と設定を配布する。
+    # Firefox の次回起動時に反映される（拡張機能は addons.mozilla.org からダウンロードされる）。
+    - name: Firefox
+      tags: [firefox]
+      vars:
+        firefox_policies:
+          policies:
+            ExtensionSettings:
+              "foxyproxy@eric.h.jung":
+                installation_mode: force_installed
+                install_url: "https://addons.mozilla.org/firefox/downloads/latest/foxyproxy-standard/latest.xpi"
+              "wappalyzer@crunchlabz.com":
+                installation_mode: force_installed
+                install_url: "https://addons.mozilla.org/firefox/downloads/latest/wappalyzer/latest.xpi"
+            Preferences:
+              # URLバーで http:// / https:// を省略せず常に表示する
+              browser.urlbar.trimURLs:
+                Value: false
+                Status: locked
+              browser.urlbar.trimHttps:
+                Value: false
+                Status: locked
+      block:
+        - name: Ensure firefox-esr is installed
+          ansible.builtin.apt:
+            name: firefox-esr
+            state: present
+          become: true
+
+        - name: Deploy Firefox enterprise policies
+          ansible.builtin.copy:
+            dest: /usr/lib/firefox-esr/distribution/policies.json
+            content: "{{ firefox_policies | to_nice_json }}\n"
+            mode: "0644"
+          become: true
+
     # ===== screenlock =====
     - name: Screen lock
       tags: [screenlock]

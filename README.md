@@ -11,6 +11,7 @@ Kali VM に XFCE デスクトップ上でログインし、そのデスクトッ
 - Docker（`docker.io`）のインストール、サービス有効化、現在ユーザーの docker グループ追加、docker compose プラグイン対応
 - BloodHound Community Edition を公式 `bloodhound-cli` 経由でインストール（初期admin パスワードを指定値に設定）
 - tmux / vim の実用的な設定ファイル配置（tmux は個人 dotfiles の設定をプラグイン無しで再現）
+- Firefox ESR に拡張機能（FoxyProxy / Wappalyzer）を自動導入し、URLバーで `http://` / `https://` を常に表示
 - XFCE のアイドル自動ロック（screensaver）を完全に無効化
 - キーボード配列を日本語(JIS)に変更（コンソール・XFCE GUI セッション両方）
 
@@ -41,7 +42,7 @@ xfconf設定タスクが `DISPLAY`/`DBUS_SESSION_BUS_ADDRESS` 不在で失敗す
 ansible-playbook playbook.yaml --ask-become-pass
 ```
 
-一部だけ実行したい場合はタグを指定する（`timezone` / `cli_tools` / `docker` / `bloodhound` / `tmux` / `vim` /
+一部だけ実行したい場合はタグを指定する（`timezone` / `cli_tools` / `docker` / `bloodhound` / `tmux` / `vim` / `firefox` /
 `screenlock` / `keyboard`。apt cache 更新は常に実行される）:
 
 ```bash
@@ -87,6 +88,12 @@ tmux-powerline(simple テーマ) 相当の設定を `config/tmux.conf` に直接
 Powerline 用パッチフォントが無くても崩れない記号（▶ ❯ など）を使っている。
 
 ## 既知の注意点
+
+- **Firefox の設定**: Enterprise Policies（`/usr/lib/firefox-esr/distribution/policies.json`）で配布している。
+  Firefox の次回起動時に反映され、拡張機能はそのとき addons.mozilla.org からダウンロードされる（要ネット接続）。
+  拡張機能は `force_installed` のためユーザー側では削除できず、URLバーの設定も `locked` で固定される。
+  適用状況は Firefox の `about:policies` で確認できる。拡張機能を追加する場合は `playbook.yaml` の
+  `firefox_policies.policies.ExtensionSettings` に「拡張機能ID: install_url」を足す。
 
 - **docker グループの反映**: `docker` タグのタスクで現在ユーザーを `docker` グループに追加するが、
   通常はログインセッション単位でキャッシュされるため、同一セッションでは反映されない。
